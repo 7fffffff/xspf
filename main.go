@@ -37,11 +37,12 @@ Examples:
 
 # find *.ext1 and *.ext2 files in dir1 and dir2
   xspf -e ext1 -e ext2 dir1 dir2 > playlist.xspf`
-	app.Spec = "(-a | -v | -e=<ext>...)... [-s] [-o=<output file>] DIRS..."
+	app.Spec = "(-a | -v | -e=<ext>...)... [-o=<output file>] [OPTIONS] DIRS..."
 	app.StringsArgPtr(&roots, "DIRS", []string{}, "directories to search")
 	app.BoolOptPtr(&useAudioPresetExts, "a audio", false, "match a bunch of audio extensions")
 	app.BoolOptPtr(&useVideoPresetExts, "v video", false, "match a bunch of video extensions")
 	app.StringsOptPtr(&exts, "e ext", []string{}, "extension to match; can be used multiple times")
+	app.BoolOptPtr(&cfg.mpcpl, "mpcpl", false, "output as mpcpl (Media Player Classic)")
 	app.BoolOptPtr(&cfg.shuffle, "s shuffle", false, "shuffle the output")
 	app.StringOptPtr(&outputPath, "o output", "", "output to file instead stdout")
 	_ = app.BoolOpt("h help", false, "show help with examples")
@@ -85,6 +86,7 @@ type config struct {
 	exts    *extMatcher
 	rng     *rand.Rand
 	shuffle bool
+	mpcpl   bool
 }
 
 func (cfg *config) WriteAll(wr io.Writer, roots []string) error {
@@ -114,9 +116,13 @@ func (cfg *config) WriteAll(wr io.Writer, roots []string) error {
 				if err != nil {
 					return err
 				}
-				// xspf paths need to look like
-				// /C:/A/B/C.mp3
-				allFiles = append(allFiles, path.Clean("/"+filepath.ToSlash(abs)))
+				if cfg.mpcpl {
+					allFiles = append(allFiles, abs)
+				} else {
+					// xspf paths need to look like
+					// /C:/A/B/C.mp3
+					allFiles = append(allFiles, path.Clean("/"+filepath.ToSlash(abs)))
+				}
 			}
 			return nil
 		})
@@ -128,6 +134,22 @@ func (cfg *config) WriteAll(wr io.Writer, roots []string) error {
 		cfg.rng.Shuffle(len(allFiles), func(i, j int) {
 			allFiles[i], allFiles[j] = allFiles[j], allFiles[i]
 		})
+	}
+	if cfg.mpcpl {
+		mpc := &mpcplWriter{
+			wr: wr,
+		}
+		err := mpc.Begin()
+		if err != nil {
+			return err
+		}
+		for _, f := range allFiles {
+			err = mpc.WriteFile(f)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	xspf := newXSPFWriter(wr)
 	err := xspf.Begin()

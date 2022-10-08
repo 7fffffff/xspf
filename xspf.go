@@ -10,7 +10,6 @@ import (
 type xspfWriter struct {
 	wr  io.Writer
 	enc *xml.Encoder
-	err error
 }
 
 func newXSPFWriter(w io.Writer) *xspfWriter {

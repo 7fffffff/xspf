@@ -42,6 +42,7 @@ Examples:
 	app.BoolOptPtr(&useAudioPresetExts, "a audio", false, "match a bunch of audio extensions")
 	app.BoolOptPtr(&useVideoPresetExts, "v video", false, "match a bunch of video extensions")
 	app.StringsOptPtr(&exts, "e ext", []string{}, "extension to match; can be used multiple times")
+	app.BoolOptPtr(&cfg.m3u, "m3u", false, "output as m3u")
 	app.BoolOptPtr(&cfg.mpcpl, "mpcpl", false, "output as mpcpl (Media Player Classic)")
 	app.BoolOptPtr(&cfg.shuffle, "s shuffle", false, "shuffle the output")
 	app.StringOptPtr(&outputPath, "o output", "", "output to file instead stdout")
@@ -86,6 +87,7 @@ type config struct {
 	exts    *extMatcher
 	rng     *rand.Rand
 	shuffle bool
+	m3u     bool
 	mpcpl   bool
 }
 
@@ -116,7 +118,7 @@ func (cfg *config) WriteAll(wr io.Writer, roots []string) error {
 				if err != nil {
 					return err
 				}
-				if cfg.mpcpl {
+				if cfg.m3u || cfg.mpcpl {
 					allFiles = append(allFiles, abs)
 				} else {
 					// xspf paths need to look like
@@ -134,6 +136,22 @@ func (cfg *config) WriteAll(wr io.Writer, roots []string) error {
 		cfg.rng.Shuffle(len(allFiles), func(i, j int) {
 			allFiles[i], allFiles[j] = allFiles[j], allFiles[i]
 		})
+	}
+	if cfg.m3u {
+		m3u := m3uWriter{
+			wr: wr,
+		}
+		err := m3u.Begin()
+		if err != nil {
+			return err
+		}
+		for _, f := range allFiles {
+			err = m3u.WriteFile(f)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	if cfg.mpcpl {
 		mpc := &mpcplWriter{
